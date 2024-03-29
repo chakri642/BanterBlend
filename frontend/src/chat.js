@@ -14,6 +14,7 @@ const Chat = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [stage, setStage] = useState("New");
     const [name, setName] = useState("Stranger");
+    const [newButtonClicked, setNewButtonClicked] = useState(false);
     const chatEndRef = useRef(null);
 
     useEffect(() => {
@@ -90,10 +91,16 @@ const Chat = () => {
         setStage("Disconnected");
         socket.send(JSON.stringify({ type: "disconnect" }));
         socket.close();
+        setSocket(null);
         console.log("Disconnected from WebSocket server.");
     };
 
     const connectNew = () => {
+        if (socket !== null) {
+            console.log("Disconnecting from WebSocket server... from connectNew", clientId);
+            disconnect();
+        }
+        setNewButtonClicked(true);
         console.log("Connecting to new WebSocket server...", clientId);
         setPartnerId("");
         const newSocket = new WebSocket(`ws://localhost:8080/ws?id=${clientId}`);
@@ -101,6 +108,7 @@ const Chat = () => {
         setChatMessages([]);
 
         newSocket.onclose = function(event) {
+            // disconnect();
             setStage("Disconnected");
             console.log("Disconnected from WebSocket server.");
         }
@@ -120,6 +128,14 @@ const Chat = () => {
                 // setChatMessages(prevMessages => [...prevMessages, { type: "inital-msg", text: "", sender: clientId, timestamp: new Date().toISOString(), name: "System" }]);
             }
 
+            // if(data.partnerId !== undefined && data.partnerId !== "Null"){
+            //     setStage("New");
+            // }
+
+            if (data.partnerId === "Null") {
+                setStage("Disconnected");
+            }
+
             if (data.type === "message" || data.type === "image" || data.type === "imageReq") {
                 if (data.type === "imageReq") {
                     setImageRequested(true);
@@ -137,6 +153,7 @@ const Chat = () => {
             }
             else if (data.type === "disconnect") {
                 setStage("Disconnected");
+                setNewButtonClicked(false);
                 newSocket.close();
                 console.log("Disconnected from WebSocket server.");
             }
@@ -160,7 +177,7 @@ const Chat = () => {
         </div>
         
         {/* add loading till it go connected */}
-        {stage === "Disconnected" && partnerId === "" &&
+        {stage === "Disconnected" && (partnerId === "" || partnerId === "Null") &&
             <div className="flex items-end justify-center h-full mb-2 mx-2">
                 <p className="text-center text-gray-500 text-sm">Connecting...</p>
             </div>
@@ -199,7 +216,7 @@ const Chat = () => {
 
         {isTyping && <div className="ml-4 mb-2 text-xs text-left text-gray-500">{name} is typing...</div>}
 
-        {stage === "Disconnected"&& partnerId !== "" && <div className="mb-2 mx-2 text-center text-red-500 text-sm">{name} has disconnected. Please click "New" to connect again.</div>}
+        {stage === "Disconnected"&& partnerId !== "" && partnerId !== "Null" && <div className="mb-2 mx-2 text-center text-red-500 text-sm">{name} has disconnected. Please click "New" to connect again.</div>}
         
 
         {(stage === "New" || stage === "Disconnect") && 
@@ -209,9 +226,9 @@ const Chat = () => {
         }
 
         <div className="chat-inputs flex items-center justify-between py-4 px-4 border-t border-grey">
-            {stage === "New" && <button onClick={() => setStage("Disconnect")} className=" min-w-18 bg-yellow-500 text-white py-2 px-4 rounded-lg">Stop</button>}
+            {stage === "New" && <button onClick={() => {setStage("Disconnect"); setNewButtonClicked(false);}} className=" min-w-18 bg-yellow-500 text-white py-2 px-4 rounded-lg">Stop</button>}
             {stage === "Disconnect" &&  <button onClick={disconnect} className="min-w-18 bg-red-500 text-white py-2 px-3 rounded-lg ">Sure?</button>}
-            {stage === "Disconnected" && <button onClick={connectNew} className=" min-w-18 bg-green-500 text-white py-2 px-4 rounded-lg ">New</button>}
+            {stage === "Disconnected" && <button onClick={() => {if(!newButtonClicked) {connectNew();}}} className={`min-w-18 text-white py-2 px-4 rounded-lg ${!newButtonClicked ? "bg-green-500" : "bg-green-300"} `}>New</button>}
 
             <textarea
                 type="text"

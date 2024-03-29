@@ -5,15 +5,17 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
-	"strconv"
+	"os"
 	"sync"
+	"time"
 
-	// "time"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
-const port = 8080
+const defaultPort = "8080"
+const defaultReadTimeout = 10 * time.Second
+const defaultWriteTimeout = 10 * time.Second
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
@@ -34,32 +36,56 @@ var (
 )
 
 func main() {
+	port := getPort()
+	readTimeout := defaultReadTimeout
+	writeTimeout := defaultWriteTimeout
+
+	server := &http.Server{
+		Addr:         ":" + port,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+	}
+
 	http.HandleFunc("/ws", handleConnections)
-	log.Fatal(http.ListenAndServe(":"+strconv.Itoa(port), nil))
+	http.HandleFunc("/health", healthCheck)
+
+	log.Printf("Server listening on port %s\n", port)
+	log.Fatal(server.ListenAndServe())
+}
+
+func getPort() string {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = defaultPort
+	}
+	return port
+}
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "Server is healthy")
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
-	fmt.Println("id xyz: ", id)
-	// Upgrade initial GET request to a WebSocket
+	log.Println("id:", id)
+
 	ws, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Error upgrading to WebSocket:", err)
+		return
 	}
 	defer ws.Close()
 
-	// Register client
-	uuid := uuid.New()
-	// use conditional operator
-	if id == "" {
-		id = uuid.String()
+	clientID := id
+	if clientID == "" {
+		clientID = uuid.New().String()
 	}
-	fmt.Println("id new xyz: ", id)
-	client := &Client{ID: id, Conn: ws, PartnerID: "Null"}
+
+	client := &Client{ID: clientID, Conn: ws, PartnerID: "Null"}
 	clientsMutex.Lock()
 	clients[client.ID] = client
 	bucket = append(bucket, client.ID)
-	fmt.Println("new client added: ", bucket)
 	clientsMutex.Unlock()
 	defer func() {
 		clientsMutex.Lock()
@@ -67,16 +93,10 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		clientsMutex.Unlock()
 	}()
 
-	fmt.Println("started")
+	log.Println("Client connected:", client.ID)
 
-	// Find a random client to pair with
-	fmt.Println("partnerId: ", client.PartnerID)
 	makeRandomPair(client.ID)
-	// client.PartnerID = partnerId
-	// fmt.Println("partnerId: ", client.PartnerID)
-	fmt.Println("paired: ", client)
 
-	// Send clientID and partnerID to the client and the paired client
 	err = ws.WriteJSON(map[string]string{"id": client.ID, "partnerId": client.PartnerID})
 	if err != nil {
 		log.Println("Error writing ID:", err)
@@ -90,48 +110,26 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Wait for messages from client
 	for {
 		var message map[string]string
-		
 		err := ws.ReadJSON(&message)
-		fmt.Println("message xyz: ", message)
-
 		if err != nil {
-			// disconnect the client and the paired client
 			log.Println("Error reading message:", err)
-			fmt.Println("disconnecting client: ", client.ID, "partnerId: ", client.PartnerID)
-
-
 			disconnectClient(client.ID)
-			for i, v := range bucket {
-				if v == client.ID {
-					bucket = append(bucket[:i], bucket[i+1:]...)
-					fmt.Println("client removed from bucket: ", bucket)
-					break
-				}
-			}
-			for i, v := range bucket {
-				if v == client.PartnerID {
-					bucket = append(bucket[:i], bucket[i+1:]...)
-					fmt.Println("client removed from bucket: ", bucket)
-					break
-				}
-			}
+
+			removeFromBucket(client.ID)
+			removeFromBucket(client.PartnerID)
 			break
 		}
 
-		partnerId := client.PartnerID
-		fmt.Println("partnerId: ", partnerId)
-		fmt.Println("ckientId: ", client.ID)
-		// Forward the message to the paired client
-		if partnerId != "Null" {
-			forwardMessage(partnerId, message)
+		partnerID := client.PartnerID
+		if partnerID != "Null" {
+			forwardMessage(partnerID, message)
 		}
 	}
 }
 
-func makeRandomPair(clientId string) {
+func makeRandomPair(clientID string) {
 	clientsMutex.Lock()
 	defer clientsMutex.Unlock()
 
@@ -140,57 +138,51 @@ func makeRandomPair(clientId string) {
 	}
 
 	// rand.Seed(time.Now().UnixNano())
+
 	var (
-		partnerIdIndex int
-		partnerId      string
+		partnerIDIndex int
+		partnerID      string
 	)
 	for {
-		partnerIdIndex = rand.Intn(len(bucket))
-		partnerId = bucket[partnerIdIndex]
-		if partnerId != clientId {
-			break
-		}
-	}
-	clients[partnerId].PartnerID = clientId
-	clients[clientId].PartnerID = partnerId
-	for i, v := range bucket {
-		if v == partnerId {
-			bucket = append(bucket[:i], bucket[i+1:]...)
-			fmt.Println("client removed from bucket: ", bucket)
-			break
-		}
-	}
-	for i, v := range bucket {
-		if v == clientId {
-			bucket = append(bucket[:i], bucket[i+1:]...)
-			fmt.Println("client removed from bucket: ", bucket)
+		partnerIDIndex = rand.Intn(len(bucket))
+		partnerID = bucket[partnerIDIndex]
+		if partnerID != clientID {
 			break
 		}
 	}
 
+	clients[partnerID].PartnerID = clientID
+	clients[clientID].PartnerID = partnerID
+
+	removeFromBucket(partnerID)
+	removeFromBucket(clientID)
 }
 
-func forwardMessage(partnerId string, message map[string]string) {
+func removeFromBucket(id string) {
+	for i, v := range bucket {
+		if v == id {
+			bucket = append(bucket[:i], bucket[i+1:]...)
+			break
+		}
+	}
+}
+
+func forwardMessage(partnerID string, message map[string]string) {
 	clientsMutex.Lock()
 	defer clientsMutex.Unlock()
 
-	pair, ok := clients[partnerId]
-	if !ok {
-		return
-	}
-
-	err := pair.Conn.WriteJSON(message)
-	if err != nil {
-		log.Printf("Error writing message to client %s: %v", partnerId, err)
+	if pair, ok := clients[partnerID]; ok {
+		err := pair.Conn.WriteJSON(message)
+		if err != nil {
+			log.Printf("Error writing message to client %s: %v", partnerID, err)
+		}
 	}
 }
-
 
 func disconnectClient(clientID string) {
 	clientsMutex.Lock()
 	defer clientsMutex.Unlock()
 
-	// Close the WebSocket connection
 	if client, ok := clients[clientID]; ok {
 		if client.Conn != nil {
 			err := client.Conn.Close()
@@ -200,14 +192,18 @@ func disconnectClient(clientID string) {
 		}
 		delete(clients, clientID)
 
-		if (client.PartnerID !="Null" && clients[client.PartnerID].Conn != nil) {
-			err := clients[client.PartnerID].Conn.Close()
-			if err != nil {
-				log.Printf("Error closing WebSocket connection for client %s: %v", client.PartnerID, err)
+		if client.PartnerID != "Null" {
+			if pair, ok := clients[client.PartnerID]; ok {
+				if pair.Conn != nil {
+					err := pair.Conn.Close()
+					if err != nil {
+						log.Printf("Error closing WebSocket connection for client %s: %v", client.PartnerID, err)
+					}
+				}
+				delete(clients, client.PartnerID)
 			}
-			delete(clients, client.PartnerID)
 		}
 
-		fmt.Println("Client disconnected clientId:", clientID, "partnerId: ", client.PartnerID)
+		log.Println("Client disconnected:", clientID)
 	}
 }
