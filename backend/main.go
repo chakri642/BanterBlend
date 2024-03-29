@@ -63,7 +63,7 @@ func getPort() string {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "Server is healthy")
+	fmt.Fprintln(w, "Server is healthy, total clients:", len(clients));
 }
 
 func handleConnections(w http.ResponseWriter, r *http.Request) {
