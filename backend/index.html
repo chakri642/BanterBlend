@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One-to-One Random Chat</title>
+</head>
+<body>
+    <input type="text" id="message" placeholder="Type your message...">
+    <button onclick="sendMessage()">Send</button>
+
+    <!-- <input type="file" id="imageInput" accept="image/*"> -->
+    <!-- Add a button to send the selected image -->
+    <!-- <button onclick="sendImage()">Send Image</button> -->
+
+    <!-- Req image -->
+    <button onclick="imageReq()">Request Image</button>
+
+    <button onclick="disconnect()">Disconnect</button>
+    <!-- <button onclick="window.location.reload()">Refresh</button> -->
+    <button onclick="connectNew()">New</button>
+    <div id="chat"></div>
+
+    <script>
+        let clientId = "", partnerId = "";
+        let socket;
+        connectNew();
+        function sendImage() {
+            const input = document.getElementById("imageInput");
+            const file = input.files[0];
+
+            if (!file) {
+                alert("Please select an image.");
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const imageBase64 = event.target.result;
+                displayImage(imageBase64);
+                socket.send(JSON.stringify({type: "image", imageBase64: imageBase64}));
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        function displayImage(imageBase64) {
+            const chat = document.getElementById("chat");
+            const imageElement = document.createElement("img");
+            imageElement.src = imageBase64;
+            imageElement.style.maxWidth = "100%";
+            chat.appendChild(imageElement);
+        }
+        
+        
+        function sendMessage() {
+            const message = document.getElementById("message").value;
+            socket.send(JSON.stringify({type: "message", text: message}));
+            displayMessage(message);
+            document.getElementById("message").value = "";
+        }
+        
+        function imageReq() {
+            socket.send(JSON.stringify({type: "imageReq"}));
+        }
+
+        function displayMessage(message) {
+            const chat = document.getElementById("chat");
+            const messageElement = document.createElement("div");
+            messageElement.textContent = message;
+            chat.appendChild(messageElement);
+        }
+
+        function displayImageRequest() {
+            const chat = document.getElementById("chat");
+            
+            // Create input element for selecting image
+            const input = document.createElement("input");
+            input.type = "file";
+            input.id = "imageInput";
+            input.accept = "image/*";
+            
+            // Create button for sending the selected image
+            const button = document.createElement("button");
+            button.textContent = "Send Image";
+            button.onclick = sendImage;
+
+            // Append input and button to chat div
+            chat.appendChild(input);
+            chat.appendChild(button);
+        }
+
+
+        function disconnect() {
+            socket.send(JSON.stringify({type: "disconnect"}));
+            socket.close();
+            console.log("Disconnected from WebSocket server.");
+        }
+
+        function connectNew() {
+            // socket.send(JSON.stringify({type: "new"}));
+            console.log("Connecting to new WebSocket server...", clientId);
+            // console.log("socket:", socket);
+            socket = new WebSocket(`ws://localhost:8080/ws?id=${clientId}`);
+            console.log("New socket:", socket);
+
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                console.log("Received Data:", data);
+                if (data.id !== undefined) {
+                    clientId = data.id;
+                    console.log("Received ID:", clientId);
+                }
+                if (data.partnerId !== undefined) {
+                    partnerId = data.partnerId;
+                    console.log("Received Partner ID:", partnerId);
+                }
+
+                // displayMessage(data.text);
+                if (data.type === "message") {
+                    displayMessage(data.text);
+                } else if (data.type === "image") {
+                    displayImage(data.imageBase64);
+                }
+                else if (data.type === "imageReq") {
+                    displayImageRequest();
+                }
+
+                // Now you have both the client's ID and the partner's ID
+                // You can use them as needed in your application
+            };
+
+            socket.onopen = function(event) {
+                // Send a message to the server to get the client ID
+                socket.send(JSON.stringify({type: "getId"}));
+            };
+
+        }
+
+    </script>
+</body>
+</html>
