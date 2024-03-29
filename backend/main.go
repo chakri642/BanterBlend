@@ -193,17 +193,6 @@ func disconnectClient(clientID string) {
 	// Close the WebSocket connection
 	if client, ok := clients[clientID]; ok {
 		if client.Conn != nil {
-			// err := client.Conn.WriteJSON(map[string]string{"msg": "disconnected"})
-			// if err != nil {
-			// 	log.Println("Error writing ID:", err)
-			// 	return
-			// }
-			// err = clients[client.PartnerID].Conn.WriteJSON(map[string]string{"msg": "disconnected"})
-			// if err != nil {
-			// 	log.Println("Error writing ID:", err)
-			// 	return
-			// }
-
 			err := client.Conn.Close()
 			if err != nil {
 				log.Printf("Error closing WebSocket connection for client %s: %v", clientID, err)
