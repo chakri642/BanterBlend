@@ -17,7 +17,11 @@ const Chat = () => {
     const [newButtonClicked, setNewButtonClicked] = useState(false);
     const chatEndRef = useRef(null);
 
+    const isLocal = process.env.NODE_ENV === 'development';
+    const websocketBaseUrl = isLocal ? 'ws://localhost:8080/ws' : 'wss://blanterblend.onrender.com/ws';
+
     useEffect(() => {
+        console.log("isLocal", isLocal);
         connectNew();
     }, []);
 
@@ -103,13 +107,14 @@ const Chat = () => {
         setNewButtonClicked(true);
         console.log("Connecting to new WebSocket server...", clientId);
         setPartnerId("");
-        const newSocket = new WebSocket(`ws://localhost:8080/ws?id=${clientId}`);
+        const newSocket = new WebSocket(`${websocketBaseUrl}?id=${clientId}`);
         setSocket(newSocket);
         setChatMessages([]);
 
         newSocket.onclose = function(event) {
             // disconnect();
             setStage("Disconnected");
+            setNewButtonClicked(false);
             console.log("Disconnected from WebSocket server.");
         }
 
