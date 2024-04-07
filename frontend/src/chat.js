@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, Component } from 'react';
 import './chat.css';
-import banterblend_name from './images/BlanterBlend_name.png';
-import banterblend_spects from './images/BlanterBlend_spects.png';
+import banterblend_name from './images/BanterBlend_name.png';
+import banterblend_spects from './images/BanterBlend_spects.png';
 
 const Chat = () => {
     const [clientId, setClientId] = useState("");
