@@ -1,0 +1,14 @@
+/* Default styles */
+
+.chat-container {
+    height: 100%;
+    width: 100%;
+    position: absolute;
+}
+
+.chat-inputs {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+}
+

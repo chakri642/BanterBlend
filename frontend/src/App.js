@@ -1,13 +1,45 @@
 import React from "react";
-import Chat from "./chat";
+// import { BrowserRouter } from 'react-router-dom'
+// import { Routes,Route } from 'react-router-dom'
+import {
+  createBrowserRouter,
+  createRoutesFromElements,
+  Route,
+  RouterProvider,
+  Router,
+  Routes,
+  Link,
+  Outlet,
+} from "react-router-dom";
+import Chat from "./components/Chat";
+import Home from "./components/Home";
 import './App.css';
 
-function App() {
+const App = () => {
+  const router = createBrowserRouter(
+    createRoutesFromElements(
+      <Route path="/" element={<Root />}>
+        <Route index element={<Home />} />
+        <Route path="/chat" element={<Chat />} />    
+      </Route>
+    )
+  );
   return (
-    <div className="App">
-      <Chat />
+    <div>
+      <RouterProvider router={router} />
     </div>
   );
 }
 
+const Root = () => {
+  return (
+    <>
+      <div>
+        <Outlet />
+      </div>
+    </>
+  );
+};
+
 export default App;
+  

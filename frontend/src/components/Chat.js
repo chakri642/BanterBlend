@@ -1,10 +1,20 @@
-import React, { useState, useEffect, useRef, Component } from 'react';
+import React, { useState, useEffect, useRef, Component, useCallback, useLayoutEffect } from 'react';
+import { useLocation, useBlocker  } from 'react-router-dom';
 import './chat.css';
-import banterblend_name from './images/BanterBlend_name.png';
-import banterblend_spects from './images/BanterBlend_spects.png';
+import banterblend_name from '../images/BanterBlend_name.png';
+import banterblend_spects from '../images/BanterBlend_spects.png';
+import { useNavigate, Link,  unstable_usePrompt, useParams, UNSAFE_NavigationContext } from 'react-router-dom';
+import useCustomPrompt from './useCustomPrompt';
 
 const Chat = () => {
-    const [clientId, setClientId] = useState("");
+
+    const navigate = useNavigate();
+    const location = useLocation();
+    const navigateContext = React.useContext(UNSAFE_NavigationContext);
+
+    const params = useParams();
+
+    const [clientId, setClientId] = useState(sessionStorage.getItem('clientId') || "");
     const [partnerId, setPartnerId] = useState("");
     const [socket, setSocket] = useState(null);
     const [messageInput, setMessageInput] = useState("");
@@ -14,16 +24,28 @@ const Chat = () => {
     const [isTyping, setIsTyping] = useState(false);
     const [stage, setStage] = useState("New");
     const [name, setName] = useState("Stranger");
+    const [partnerName, setPartnerName] = useState("Stranger");
     const [newButtonClicked, setNewButtonClicked] = useState(false);
+    const [matchedInterest, setMatchedInterest] = useState("Null");
+    const [showImagePopup, setShowImagePopup] = useState(false);
     const chatEndRef = useRef(null);
 
     const isLocal = process.env.NODE_ENV === 'development';
     const websocketBaseUrl = isLocal ? 'ws://localhost:8080/ws' : 'wss://blanterblend.onrender.com/ws';
 
     useEffect(() => {
-        console.log("isLocal", isLocal);
-        connectNew();
-    }, []);
+        if (!location.state) {
+            navigate('/');
+        } else {
+            const ourName = location.state.name;
+            const interests = location.state.interests;
+            setName(ourName);
+            logForDev("isLocal", isLocal);
+            logForDev("name in useeffect ", name);
+            connectNew();
+        }
+        
+    }, [location]);
 
     const scrollToBottom = () => {
         chatEndRef.current?.scrollIntoView({});
@@ -34,20 +56,65 @@ const Chat = () => {
         scrollToBottom();
     }, [chatMessages]);
 
+    const logForDev = (...args) => {
+        if (process.env.NODE_ENV === 'development') {
+            console.log(...args);
+        }
+    };
+
+
+    const [shouldBlockNavigation, setShouldBlockNavigation] = useState(false);
     useEffect(() => {
-        const handleBeforeUnload = (event) => {
-          event.preventDefault();
-          event.returnValue = '';
+        setShouldBlockNavigation(true);
+        return () => {
+            setShouldBlockNavigation(false);
         };
-        window.addEventListener('beforeunload', handleBeforeUnload);
+    }, []);
+
+    const blocker = useBlocker((tx) => {
+        if (shouldBlockNavigation && tx.currentLocation.pathname !== tx.nextLocation.pathname) {
+        //   const confirmation = window.confirm('Are you sure you want to leave this page?');
+        //   if (!confirmation) {
+        //     logForDev("tx", tx);
+        //     logForDev("blocker", blocker);
+        //     blocker.reset();
+        //     // Retry the navigation to prevent it from happening
+        //     // navigateContext.navigator.abort();
+        //     // tx.reset();
+        //   } else {
+            if (socket !== null && partnerId !== '' && partnerId !== 'Null') {
+              logForDev(socket);
+              logForDev('partnerId', partnerId);
+              logForDev('Disconnecting from WebSocket server... from onpopstate', clientId);
+              disconnect();
+            }
+            setShouldBlockNavigation(false);
+          }
+        // }
+      }, [shouldBlockNavigation, socket, partnerId, clientId]);
+
+    useEffect(() => {
+        logForDev('useEffect called before leaving')
+        const handleBeforeUnload = (event) => {
+          if (location.pathname === '/chat') {
+            event.preventDefault();
+            event.returnValue = 'Are you sure you want to leave the chat?';
+          }
+        };
+    
+        if (location.pathname === '/chat') {
+          window.addEventListener('beforeunload', handleBeforeUnload);
+        }
+    
         return () => {
           window.removeEventListener('beforeunload', handleBeforeUnload);
         };
-      }, []);
+    }, [location.pathname]);
 
+    
     const sendImage = () => {
         if (!imageInput) {
-            alert("Please select an image.");
+            setShowImagePopup(true);
             return;
         }
 
@@ -96,18 +163,20 @@ const Chat = () => {
         socket.send(JSON.stringify({ type: "disconnect" }));
         socket.close();
         setSocket(null);
-        console.log("Disconnected from WebSocket server.");
+        logForDev("1");
+        logForDev("Disconnected from WebSocket server.");
     };
 
     const connectNew = () => {
         if (socket !== null) {
-            console.log("Disconnecting from WebSocket server... from connectNew", clientId);
+            logForDev("Disconnecting from WebSocket server... from connectNew", clientId);
             disconnect();
         }
         setNewButtonClicked(true);
-        console.log("Connecting to new WebSocket server...", clientId);
+        logForDev("Connecting to new WebSocket server...", clientId);
         setPartnerId("");
-        const newSocket = new WebSocket(`${websocketBaseUrl}?id=${clientId}`);
+        setMatchedInterest("Null");
+        const newSocket = new WebSocket(`${websocketBaseUrl}?id=${clientId}&name=${location.state.name}&interests=${JSON.stringify(location.state.interests)}`);
         setSocket(newSocket);
         setChatMessages([]);
 
@@ -115,33 +184,41 @@ const Chat = () => {
             // disconnect();
             setStage("Disconnected");
             setNewButtonClicked(false);
-            console.log("Disconnected from WebSocket server.");
+            logForDev("2");
+            logForDev("Disconnected from WebSocket server.");
         }
 
         newSocket.onmessage = function(event) {
             const data = JSON.parse(event.data);
-            console.log("Received Data:", data);
+            logForDev("Received Data:", data);
             if (data.id !== undefined) {
                 setClientId(data.id);
-                console.log("Received ID:", data.id);
+                sessionStorage.setItem('clientId', data.id);
+                logForDev("Received ID:", data.id);
             }
             if (data.partnerId !== undefined) {
                 setPartnerId(data.partnerId);
                 setStage("New");
                 setMessageInput("");
-                console.log("Received Partner ID:", data.partnerId);
+                logForDev("Received Partner ID:", data.partnerId);
+                logForDev("sending name: ", location.state.name);
+                newSocket.send(JSON.stringify({ type: "partnerName", name: location.state.name }));
+
                 // setChatMessages(prevMessages => [...prevMessages, { type: "inital-msg", text: "", sender: clientId, timestamp: new Date().toISOString(), name: "System" }]);
             }
+            if (data.matchedInterest !== undefined) {
+                setMatchedInterest(data.matchedInterest);
+            }
 
-            // if(data.partnerId !== undefined && data.partnerId !== "Null"){
-            //     setStage("New");
-            // }
 
             if (data.partnerId === "Null") {
                 setStage("Disconnected");
             }
 
-            if (data.type === "message" || data.type === "image" || data.type === "imageReq") {
+            if (data.type === "partnerName"){
+                setPartnerName(data.name);
+            }
+            else if (data.type === "message" || data.type === "image" || data.type === "imageReq") {
                 if (data.type === "imageReq") {
                     setImageRequested(true);
                 }
@@ -160,7 +237,8 @@ const Chat = () => {
                 setStage("Disconnected");
                 setNewButtonClicked(false);
                 newSocket.close();
-                console.log("Disconnected from WebSocket server.");
+                logForDev("3");
+                logForDev("Disconnected from WebSocket server.");
             }
         };
 
@@ -173,12 +251,12 @@ const Chat = () => {
     return (
     <div className="chat-container flex flex-col font-Lato">
         <div className="chat-header flex items-center justify-start py-4 px-4 border-b border-grey">
-            <div className='w-20 items-start'>
+            <div className={`w-20 items-start ${stage === "Disconnected" && newButtonClicked && "animate-bounce"}`}>
                 <img src={banterblend_spects} alt="Logo" />
             </div>
-            <div className='flex flex-col items-center w-full'>
+            <Link to="/" className='flex flex-col items-center w-full' >
                 <img className="w-60" src={banterblend_name} alt="BanterBlend" />
-            </div>
+            </Link>
         </div>
         
         {/* add loading till it go connected */}
@@ -190,12 +268,14 @@ const Chat = () => {
 
         <div className="flex-grow flex flex-col overflow-y-auto bottom-0 justify-start ml-1 mr-2 w-auto">
             <div className='mt-auto'>
-                {(stage === "New" || stage === "Disconnect") && <div className="text-sm mt-auto text-center text-gray-500 mb-2 ">Connected to {name}. Say Hi!</div>}
+
+                {matchedInterest !== "Null" && (stage === "New" || stage === "Disconnect") && <div className="text-sm mt-auto text-center text-gray-500 mb-2 ">You both like {matchedInterest}.</div>}
+                {(stage === "New" || stage === "Disconnect") && <div className="text-sm mt-auto text-center text-gray-500 mb-2 ">Connected to {partnerName}. Say Hi!</div>}
 
                 {chatMessages.map((message, index) => (
                     <div key={index} className={`flex flex-col text-left ml-2 mb-2 min-w-16 w-fit first:mt-auto rounded-lg bg-white px-2 py-2 border border-gray-100 items-start`}>
                         {/* {message.type === "inital-msg" && <p className={`w-full text-wrap text-black`}>Connected to {name}. Say Hi!</p>} */}
-                        <span className={`text-xxs leading-3 text-wrap font-bold${message.sender === clientId ? " text-red-500" : " text-sky-500"}`}>
+                        <span className={`text-xxs leading-3 text-wrap font-bold ${message.sender === clientId ? " text-red-500" : " text-sky-500"}`}>
                             {message.sender === clientId ? "ME" : message.name.toUpperCase()}
                         </span>
                         {message.type === "message" && <p className={`text-wrap text-black`}>{message.text}</p>}
@@ -216,10 +296,12 @@ const Chat = () => {
                     </div>
                 ))}
             </div>
+            {isTyping ? <div className="ml-4 mb-2 text-xs text-left text-gray-500">{name} is typing...</div> : <div className="ml-4 mb-5
+             text-xs text-left text-gray-500"></div>}
+            {/* <div className="ml-4 mb-2 text-xs text-left text-gray-500">{name} is typing...</div> */}
             <div ref={chatEndRef} />
         </div>
 
-        {isTyping && <div className="ml-4 mb-2 text-xs text-left text-gray-500">{name} is typing...</div>}
 
         {stage === "Disconnected"&& partnerId !== "" && partnerId !== "Null" && <div className="mb-2 mx-2 text-center text-red-500 text-sm">{name} has disconnected. Please click "New" to connect again.</div>}
         
@@ -251,12 +333,30 @@ const Chat = () => {
                 }}
                 placeholder="Type your message..."
                 disabled = {stage === "Disconnected"}
-                className={`message-input text-base flex-1 mx-1 py-2 px-2 min-w-0 rounded-lg caret-red-600 bg-gray-100 focus:outline-none focus:bg-white border border-gray-300 ${stage === "Disconnected" ? "bg-gray-200" : ""}`}
+                className={`text-base flex-1 mx-1 py-2 px-2 min-w-0 rounded-lg caret-red-600 bg-gray-100 focus:outline-none focus:bg-white border border-gray-300 ${stage === "Disconnected" ? "bg-gray-200" : ""}`}
             > </textarea>
         
             <button onClick={sendMessage} className={` text-white py-2 px-4 rounded-lg ${stage === "Disconnected" ? "bg-gray-300" : "bg-yellow-500"}`}>Send</button>
             {/* <div ref={chatEndRef} /> */}
         </div>
+
+        {showImagePopup && (
+                <div className="fixed inset-0 flex items-center justify-center bg-gray-800 bg-opacity-50">
+                    <div className="bg-white p-4 rounded-lg max-w-xs sm:max-w-md">
+                        {/* <h2 className="text-lg font-bold mb-4">Please select an image to send</h2> */}
+                        <p className="mb-4 font-semibold">Please select an image to send.</p>
+                        <div className="flex justify-center">
+                            <button
+                                onClick={() => setShowImagePopup(false)}
+                                className="bg-yellow-500 hover:bg-yellow-700 text-white font-bold py-2 px-4 rounded min-w-48"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        
     </div>
 
     );
