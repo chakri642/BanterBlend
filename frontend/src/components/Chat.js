@@ -4,7 +4,6 @@ import './chat.css';
 import banterblend_name from '../images/BanterBlend_name.png';
 import banterblend_spects from '../images/BanterBlend_spects.png';
 import { useNavigate, Link,  unstable_usePrompt, useParams, UNSAFE_NavigationContext } from 'react-router-dom';
-import useCustomPrompt from './useCustomPrompt';
 
 const Chat = () => {
 
