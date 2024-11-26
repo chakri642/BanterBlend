@@ -66,7 +66,7 @@ func main() {
 	}
 
 	http.HandleFunc("/ws", handleConnections)
-	http.HandleFunc("/health", healthCheck)
+	http.HandleFunc("/healthcheck", healthCheck)
 
 	fmt.Println("Server listening on port", port)
 	log.Fatal(server.ListenAndServe())
@@ -82,6 +82,7 @@ func getPort() string {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
+	fmt.Println("Server is healthy, total clients:", len(clients))
 	fmt.Fprintln(w, "Server is healthy, total clients:", len(clients))
 }
 
