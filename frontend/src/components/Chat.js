@@ -30,7 +30,7 @@ const Chat = () => {
     const chatEndRef = useRef(null);
 
     const isLocal = process.env.NODE_ENV === 'development';
-    const websocketBaseUrl = isLocal ? 'ws://localhost:8080/ws' : 'wss://blanterblend.onrender.com/ws';
+    const websocketBaseUrl = isLocal ? 'ws://localhost:8080/ws' : 'wss://banterblend.koyeb.app/ws';
 
     useEffect(() => {
         if (!location.state) {
@@ -302,7 +302,7 @@ const Chat = () => {
         </div>
 
 
-        {stage === "Disconnected"&& partnerId !== "" && partnerId !== "Null" && <div className="mb-2 mx-2 text-center text-red-500 text-sm">{name} has disconnected. Please click "New" to connect again.</div>}
+        {stage === "Disconnected"&& partnerId !== "" && partnerId !== "Null" && <div className="mb-2 mx-2 text-center text-red-500 text-sm">{partnerName} has disconnected. Please click "New" to connect again.</div>}
         
 
         {(stage === "New" || stage === "Disconnect") && 
