@@ -12,6 +12,7 @@ import {
   Outlet,
 } from "react-router-dom";
 import Chat from "./components/Chat";
+import VideoChat from "./components/VideoChat";
 import Home from "./components/Home";
 import './App.css';
 
@@ -20,7 +21,8 @@ const App = () => {
     createRoutesFromElements(
       <Route path="/" element={<Root />}>
         <Route index element={<Home />} />
-        <Route path="/chat" element={<Chat />} />    
+        <Route path="/chat" element={<Chat />} />
+        <Route path="/video-chat" element={<VideoChat />} />
       </Route>
     )
   );

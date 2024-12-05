@@ -31,7 +31,7 @@ const Home = () => {
 
   const handleAgeConfirmation = (isOver18) => {
     if (isOver18) {
-      navigate('/chat', { state: { name, interests } });
+      navigate('/video-chat', { state: { name, interests } });
     }
     setShowAgePopup(false);
   };
